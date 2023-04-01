@@ -1,0 +1,83 @@
+---
+title: "230 Intro"
+author: "Abe Burton"
+date: "1/17/2020"
+output: word_document
+---
+
+```{r setup}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+library(tidyverse)
+library(dplyr)
+
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+alloy <- read.csv("alloy.csv",header=TRUE,stringsAsFactors = FALSE)
+```
+
+```{r}
+mean(alloy[,1])
+sd(alloy[,1])
+
+#find mean of strength where alloy is 1
+mean(alloy[alloy$alloy == 1,1])
+
+t.test(alloy[alloy$alloy==1,1],alloy[alloy$alloy==2,1],"two.sided")
+t.test(alloy[alloy$alloy==1,1],alloy[alloy$alloy==2,1],"two.sided",var.equal = TRUE)
+
+
+```
+
+```{r}
+x <- c(3,4,5,6)
+y <- c(5,7,8,12)
+
+dat <- data.frame(x,y)
+
+dat$x+1
+as.character(dat$x)
+log(dat$x)
+exp(dat$x)
+#as.character(dat$x)+1  Doesn't work because you can't add one to a character
+                
+```
+```{r}
+pnorm(1.353)
+qnorm(.909)
+#qnorm gives you the z score for a given p value, pnorm does the opposite
+
+pt(1.335,12)
+qt(.897,12)
+```
+```{r}
+rnvals <- rnorm(100,6,3)
+mean(rnvals)
+sd(rnvals)
+#not exact since it created a sample of a normal distribution
+
+hist(rnvals)
+boxplot(rnvals)
+```
+```{r}
+x <- runif(15,0,10)
+y <- 1.2*x + 3 + rnorm(12,0,4)
+pl <- plot(x,y)
+pl
+
+
+xy = data.frame(x,y)
+lm.xy <- lm(xy[,2]~xy[,1])
+summary(lm.xy)
+coef(lm.xy)
+plot(xy)
+abline(lm.xy, col="blue")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

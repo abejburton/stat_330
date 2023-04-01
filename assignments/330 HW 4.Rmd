@@ -1,0 +1,119 @@
+---
+title: "338 HW 4"
+author: "Abe Burton"
+date: "2/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+fat <- read.delim("/Users/abrahamburton/Downloads/BodyFat.txt", header = T, stringsAsFactors = F,sep = " ")
+
+library(MASS) #stdres
+library(car) ## addedvariable plots
+library(normtest) #jb.norm.test
+library(lmtest) #bptest
+```
+
+Most methods of measuring body fat are difficult. Anyone interested in body fat data could have an interest in an easer method, one of which could be regression. A statistical model using relevant variables to predict body fat percentage with some uncertainty could be very helpful. A precise model could give prediction with similar accuracy to methods like submersion, and would be much easier since predictions could be made by plugging in a subjects characteristics into the model. 
+
+```{r}
+plot(fat)
+# a plot of all variables is overwhelming and hard to read. So I plotted smaller sections of variables to check for linearity. One of those subsetions is below.
+pairs(fat[,c(1,2:5)])
+
+cov(fat)[1,]
+cor(fat)[1,]
+```
+2. Scatterplots of the variables appear to show somewhat strong positive linear relationships with body fat percentage for all variables with some possible outliers and maybe some exceptions like height. For the most part, everything looks linear and the correlations between the variables and body fat percentage are generally strong. Height has only a very small correlation and is the only negative variable. Height and the potential outliers are the two things I will pay attention to that could cause problems or not improve the model later on.
+
+3. A potential model could be: $Brozek_{i} = \beta_{0} + \beta_{1}Age_{i} + \beta_{2}Weight_{i} + \beta_{3}Height_{i} + \beta_{4}Neck_{i} + \beta_{5}Chest_{i} + \beta_{6}Abdom_{i} + \beta_{1}Hip_{7} + \beta_{1}Thigh_{8} + \beta_{9}Knee_{i} + \beta_{10}Ankle_{i} + \beta_{11}Biceps_{i} + \beta_{12}Forearm_{i} + \beta_{13}Wrist_{i} + \epsilon_i$. In this model, Brozek is body fat percentage which is predicted by the factors Age, Weight, and Height, followed by a factor for the circumference of each of the ten body parts in the model. $\beta_0$ is interpreted as the mean body fat percentage when all other factors are zero. This doesn't make much sense, a centered model would be one way of making $\beta_0$ interpretable. The coefficient $\beta_1$ is the amount body fat percentage changes when. all else being equal, age increases by one year. Each coefficient is interpreted in the same way with its respective variable. The subscript i indexes the individual, and $\epsilon$ is the error or the difference between body fat percentage and the sum of the factors multiplied by their coefficients in the model.
+
+4. The fitted model below outputs a table with estimates for each coefficient. For example, the coefficient on "abdom" is .88543. The intepretation is that, all else being equal, if the abdomen circumference increases by 1, body fat percentage is predicted to increase by .88543 on average. Other variables would be interpreted the same way with a 1 unit increase in a variable predicting a coefficient sized increase in body fat percentage on average. A table of coefficients is outputted below from the summary code.
+
+```{r}
+fat_lm = lm(brozek ~ age + weight + height + neck + chest + abdom + hip + thigh + knee + ankle + biceps + forearm + wrist,data = fat)
+summary(fat_lm)
+
+```
+
+5. Assumptions:
+Linearity: For the sake of not taking up too muich space, I only showed some of the added variable plots. THat being said, when looking through the plots they all seemed like they had linear relationships which confirms what the exploratory analysis showed. 
+
+```{r}
+avPlots(fat_lm)
+```
+Independence: The assumption of independence is that the errors are independent from each other and from the covariates. There appears to be no trend in the residual versus fitted values or covariate plots. (One covariate plot shown as an example.) The data appears to be independent.
+
+```{r}
+plot(fat_lm$fitted.values,fat_lm$residuals,
+     pch=20,ylim=c(-20,20))
+plot(fat$age,fat_lm$residuals,
+     pch=20,ylim=c(-20,20))
+```
+Normality:
+The standardized residuals should be normal in order for the data to meet the normality assumption. KS and JB tests both fail to reject the normality of the data. The histogram and QQ plots of the residuals confirm the normality visually.
+```{r}
+std_res = MASS::stdres(fat_lm)
+
+hist(std_res,freq = FALSE)
+curve(dnorm,from = -4,to = 4,add = TRUE,
+      col = "green")
+
+jb.norm.test(stdres(fat_lm),nrepl = 1e4)
+ks.test(stdres(fat_lm),"pnorm")
+
+qqnorm(stdres(fat_lm))
+abline(0,1)
+
+```
+Equal Variance:
+The residuals should have expected equal variance conditional on the covariates. The residuals versus fitted values plot suggests that this is true visually and the Breusch-Pagan test confirms it by failing to reject the null hypothesis.
+```{r}
+plot(fat_lm$fitted.values,fat_lm$residuals,pch=19)
+abline(a=0,b=0)
+
+bptest(fat_lm)
+```
+6. A few things should be done to assess how good the model is at prediction and inference. The R^2 of the model is 0.7464 which means that 0.7464 of the variation in body fat percentage in the data can be explained by the variables included in the model. Next, a test is run to check the bias, error, coverage, and prediction interval width of the model. The bias is 0.159 which means that predictions are off by .159 on average which is pretty small compared to the body fat percentage range of 45 in the data. The root predictive mean squared error is 3.8 which is less than have of the standard deviation of 7.7 which is pretty good. This means that the predicted error is significantly less than it would be naturally in the data. The mean coverage is 95.1 which is right at the 95% level we would like it to be. THis means that 95.1% of prediction intervals contained the actual body fat percentage so the intervals are the right size. The average prediction interval with is 16.1 which is a pretty wide range of body fat percentage values. The predictions are good and the model fits well overall.
+```{r}
+n.test = 4
+n.cv = 1000
+bias = numeric(n.cv)
+rpmse = numeric(n.cv)
+coverage = numeric(n.cv)
+width = numeric(n.cv)
+
+set.seed(3)
+
+for(i in 1:n.cv){
+  test.obs = sample(1:251,n.test)
+  fat.test = fat[test.obs,]
+  fat.train = fat[-test.obs,]
+  train.lm = lm(brozek~.,data=fat.train)
+  preds = predict.lm(train.lm,newdata=fat.test,interval = "prediction")
+  bias[i] = mean(preds[,1]-fat.test$brozek)
+  rpmse[i] = sqrt(mean((preds[,1]-fat.test$brozek)^2))
+  width[i] = mean(preds[,3]-preds[,2])
+  coverage[i] = mean(preds[,2] < fat.test$brozek & preds[,3] > fat.test$brozek)
+  
+}
+
+
+
+mean(bias)
+mean(rpmse)
+mean(coverage)
+mean(width)
+
+range(fat$brozek)
+sd(fat$brozek)
+```
+7. Make a prediction. The predicted body fat for this person is 31.30359. A prediction is obtained by plugging in values for every variable in the model. These values are multiplied by the coefficients that were generated from fitting the model and added up. This results in a final prediction value of 31.30359. This prediction comes with the uncertainty still that was shown in cross validation.
+```{r}
+
+predict.lm(fat_lm,newdata=data.frame(age= 50,
+weight= 203, height= 67, neck= 40.2, chest=114.8, abdom=108.1, hip=102.5, thigh=61.3,
+knee= 41.1, ankle= 24.7, biceps= 34.1, forearm= 31, wrist= 18.3))
+
+```

@@ -1,0 +1,68 @@
+---
+title: "Stat 330 HW1"
+author: "Abe Burton"
+date: "1/26/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup}
+#Set working directory and load data set
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+wind <- read.delim("/Users/abrahamburton/Downloads/windmill.txt", header = T, stringsAsFactors = F,sep = " ")
+```
+1. Companies constructing wind mills need to know if their windspeed estimates for a site are accurate so that they can know the amount of energy production possible at a candidate site. In order to avoid the cost of data collection, they can use information from a nearby site with similar windspeed. If the nearby site predicts the candidate wind data well, then they can skip costly data collection and just use the nearby data. A simple bivariate linear regression will show correlation between the windspeeds and show how much of the variation in candidate windspeed is attributable to reference windspeed. The model allows for predictions of candidate windspeeds and solves the problem.
+
+2. The scatter plots below appear to show a strong positive linear relationship between reference and candidate wind speed. There don't appear to be any extreme outliers in the data set that would skew analysis. A quick test for correlation and covariance shows a strong relationship, so a bivariate linear regression seems appropriate to use in this case.
+```{r}
+#Calculate summary statistics, create a scatter plot with a line through it. Calculate correlation and covariance.
+summary(wind)
+plot(wind$RSpd, wind$CSpd, xlab="Reference Speed", ylab="Candidate Speed")
+scatter.smooth(wind$RSpd,wind$CSpd,xlab="Reference Speed",ylab="Candidate Speed")
+cor(wind$CSpd,wind$RSpd)
+cov(wind$CSpd,wind$RSpd)
+```
+3. A good model for this data set would be: $Y_{i}=\beta_{0} + \beta_{1}x_{i} + \epsilon_{i}$. $\beta_{0}$ is the mean candidate speed when the reference speed is zero. $\beta_{1}$ is the amount candidate speed changes when the reference speed increases by one. $\epsilon$ is the error term, or the distance between the predicted value ($\beta_{0} + \beta_{1}$) and the actual candidate speed. $Y_{i}$ is the candidate speed observed in the data, and $X_{i}$ is the reference speed. Simple linear regression minimizes the squared error of this model by taking the derivative of the squared error term and setting it equal to zero. Then estimates for each parameter are calculated by solving for each variable. Mathematically, $\frac{\partial}{\partial (\beta_{0},\beta_1)} \sum_{i = 1}^{n} (Y_{i} - \beta_{0} - \beta_{1}x_{i})^{2}$. Once this model is fitted to the data, it will give the best unbiased linear estimators of the parameters we are looking for. 
+
+This relies on the four Gauss-Markov assumptions:
+1) Linearity - X and Y must have a linear relationship
+2) Independence - The errors must be independent of each other and and of the covariates. In other words the zero conditional mean assumption means the estimated equation is exogenous and has no serial correlation.
+3) Normality - The errors must be normally distributed
+4) Equal Variance - Variance must be homoskedastic. $\sigma^2$ must be constant.
+```{r}
+#Fit the model, run the regression and then show the model output and coefficients
+wind.lm <- lm(wind$CSpd~wind$RSpd)
+
+summary(wind.lm)
+summary(wind.lm)$sigma
+wind.lm$coefficients
+```
+4. The fitted model is $\hat{Y_{i}}=\hat\beta_{0} + \hat\beta_{1}x_{i}$. Inputting the estimators after running the SLR regression gives us: $\hat{Y_{i}}=3.1423 + 0.75573x_{i}$. This means that the mean candidate wind speed when the reference windvspeed is zero is estimated at 3.1423. For a one-unit increase in reference wind speed, the candidate wind speed increases by a predicted 0.75573. Plotting these parameters in a line on the scatter plot shows the fitted regression visually:
+```{r}
+#plot the data with the regression line
+plot(wind$CSpd,wind$RSpd,xlab="Reference Wind Speed",ylab="Candidate Wind Speed")
+abline(a=wind.lm$coef[1],b=wind.lm$coef[2],lwd=3,col="green")
+```
+5. This fitted model can be used to create predictions for wind speed at the candidate site given the wind speed at the reference site. Plug the value for reference speed into the fitted equation for $x_{i}$ and the resulting $\hat{Y_{i}}$ is the prediction for candidate speed. For example, if the reference wind speed is 12 m/s, $3.1423 + 0.75573(12)=12.21106$ so the estimated candidate wind speed is 12.21106.
+
+6. This model has some limitations to its predictions. There is no data on windspeeds above 23 m/s so we should be careful not to extrapolate and make any prediction beyond what the data shows. A prediction for when the reference site has a wind speed of 30 m/s would be inappropriate because this model should be limited to the range of the data it uses. There is a change that the relationship could become nonlinear or change strengths at speeds that aren't observed which is why we are careful not to extrapolate.
+
+7. Maximum likelihood derivation for $\beta_{0}$ and $\sigma^2$ where $Y \sim {\sf N}(\beta_{0},\sigma^2)$:
+
+For $\beta_{0}$ the derivation for the estimate is:
+
+$L(\beta_{0},\sigma^2)=\prod_{i = 1}^{N} \frac{1}{\sqrt{2\pi\sigma^2}}e^{\frac{-1}{2\sigma^2}(Y_{i}-\beta_{0})^2}$
+$=(2\pi\sigma^2)^{\frac{-N}{2}}e^{\frac{-1}{2\sigma^2}\sum_{i = 1}^{N}(Y_{i}-\beta_0)^2}$
+$l(\frac{\partial}{\partial (\beta_{0},\sigma^2)})\propto \frac{-N}{2}ln(\sigma^2)-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$=0-\frac{1}{2\sigma^2}\sum_{i}^{N}-2(Y_{i}-\beta_{0})=0$
+$N\overline{Y}=N\beta_{0}$
+$\hat{\beta_{0}}=\overline{Y}$
+
+For $\sigma^2$ the derivation for the estimate is:
+$l(\frac{\partial}{\partial (\sigma^2)})= \frac{-N}{2}ln(\sigma^2)-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$= \frac{-N}{2\sigma^2}-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$=\frac{N}{2\sigma^2}*\frac{2(\sigma^2)^2}{1}=\sum_{i}^{N} (Y_{i}-\beta_{0})^2$
+$\sigma^2=\frac{1}{N}\sum_{i}^{N}(Y_{i}-\hat\beta_{0})^2$
+$\hat{\beta_{0}}=\overline{Y}$
+

@@ -1,0 +1,152 @@
+---
+title: "330 HW 8"
+author: "Abe Burton"
+date: "3/30/2021"
+output: html_document
+---
+
+```{r setup, echo  = FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+diab <- read.table("/Users/abrahamburton/Downloads/diabetes.txt", header = TRUE)
+flag = which(apply(diab[,2:6],1,function(x){ any(x == 0 )}))
+diabetes_data = diab[-flag,]
+
+library(ggplot2)
+library(knitr)
+library(car)
+library(bestglm)
+library(pROC)
+library(knitr)
+```
+
+1. Type two diabetes is associated with health complications that are treated better when a proper diagnosis exists. The data set has information on many predictors of diabetes, and a statistical model can be used to predict whether someone has diabetes or not. Logistic regression can be used to assess the probability of diabetes and give a predicted diagnosis. This means that the goal of this model is prediction rather than inference for a diagnosis.
+
+2. Traditional MLR methods don't work well for a prediction problem that deals with probability. There would be results outside of 0 and 1 which doesn't make sense for probability, and other assumptions wouldn't be met. The response variable is binary which creates these issues. For instance, with probability, the data will follow a Bernoulli distribution instead of residuals following a normal one. For those reasons, logistic regression fits what is necessary here. As glucose levels increase, it appears that the probability of diabetes increases. Diabetes probability also seems to increase monotonically with age since the nonlinear portion only appears after 65 when there is only one observation. The data appears to be good for logistic regression.
+```{r}
+ggplot(diabetes_data,aes(x=age,y=diabetes)) + geom_jitter(width=.5,height=.1) + 
+  geom_smooth() 
+ggplot(diabetes_data,aes(x=glucose,y=diabetes)) + geom_jitter(width=.5,height=.1) + 
+  geom_smooth() 
+summary(diabetes_data$diabetes)
+summary(diabetes_data$age)
+summary(diabetes_data$glucose)
+
+
+```
+3. I used the AIC selection criterion because it is better for prediction than BIC and penalizes extra variables. I used an exhaustive algorithm because this data set isn't very big and this will allow the algorithm to check all possible combinations to see which one gives the best fit. The variables that it selected were pregnant, bmi, glucose, pedigree, and age as the most important in explaining diabetes.
+```{r}
+var_select = bestglm(diabetes_data,IC="AIC",family=binomial,
+                     method = "exhaustive")
+var_select$BestModel
+```
+4. Model and Assumptions
+
+Let $Y_i$ be a binary variable for diabetes where 1 indicates they have diabetes and 0 indicates they do not.
+
+Using the variables selected, a model could look like $$\log(\frac{p_i}{1-p_i}) = \beta_0 + \beta_{1}\text{pregnant}_i + \beta_{2}\text{glucose}_i + \beta_{3}\text{bmi}_i + \beta_{4}\text{pedigree}_i + \beta_{5}\text{age}_i$$. $$Y_i \overset{iid}{\sim} \text{Bernoulli}(p_i)$$
+
+Assumptions:
+
+Linearity: The log odds of diabetes are linear with respect to the covariates, or probability is monotone.
+Independence: The response variables are independent given the covariate information available.
+Bernoulli: The data follows a bernoulli distribution.
+
+The added variable plots don't show any linearity assumption violations. It is assumed that diabetes status of one individual wouldn't affect another individuals, so independence shouldn't be an issue. This is probably true if the sampling was random. The bernoulli distribution is the case because the response variable is binary.
+
+
+```{r}
+#linearity: avplots
+model = glm(diabetes ~ pregnant + glucose + bmi + pedigree + age, data = diabetes_data, family = "binomial")
+avPlots(model)
+```
+
+5. Model Fit, Confidence Intervals, Interpretation.
+
+We are 95% confident that when pedigree score increases by 1, holding all else constant, the log odds of diabetes increase by beween .337 and 2.
+```{r}
+
+summary(model)
+CI = confint(model)
+kable(CI)
+kable(100*(exp(CI[-1,])-1))
+
+```
+6. Cutoff threshold and plot
+
+The threshold that minimizes missclassification is 0.4136364 as shown by the plot below which shows the minimization.
+```{r}
+pred_probs = predict.glm(model,type="response")
+
+n_cutoff = 100
+cutoff = seq(0.05,0.95,length=n_cutoff)
+misclass_rate = rep(0,n_cutoff)
+
+for(i in 1:n_cutoff){
+  preds = 1 * (pred_probs > cutoff[i])               ##### predict for cutoff
+  conf.mat = table(preds,diabetes_data$diabetes)                  ##### get confusion matrix
+  misclass_rate[i] = 1 - sum(diag(conf.mat))/sum(conf.mat)    #### get misclassification rate
+}
+
+plot(cutoff,misclass_rate,type="l",ylab="Misclassification Rate",xlab="Cutoff")
+abline(v = cutoff[which.min(misclass_rate)])
+cutoff_use = cutoff[which.min(misclass_rate)]
+```
+7. Confusion Matrix
+
+The pseudo $R^2$ for the model is 0.3076. The confusion matrix is in the table output below. The AUC of the model is 0.8631.
+```{r}
+r2 = 1-model$deviance/model$null.deviance
+r2
+
+roc = roc(diabetes_data$diabetes,pred_probs)
+plot(roc,legacy.axes = TRUE)
+auc = auc(roc)
+print(auc)
+#AUC .86 SCREENSHOTS FOR CODE
+
+classification = ifelse(predict.glm(model,type = "response")>cutoff_use,1,0)
+confusion_matrix = table(Predicted = classification, True  = diabetes_data$diabetes)
+confusion_matrix
+
+```
+The sensitivity is `r confusion_matrix[2,2] / (confusion_matrix[2,2]+confusion_matrix[1,2])`
+The specificity is `r confusion_matrix[1,1] / (confusion_matrix[2,1]+confusion_matrix[1,1])`
+The ppv is `r confusion_matrix[2,2] / (confusion_matrix[2,2]+confusion_matrix[2,1])`
+The npv is `r confusion_matrix[1,1] / (confusion_matrix[1,1]+confusion_matrix[1,2])`
+The model seems to fit data fairly well since the AUC is high. It isn't a big deal that the pseudo-$R^2$ isn't high because the upper bound isn't really one. The model correctly predicts the large majority of cases as shown by the predictive values above.
+
+8. Cross Validation
+
+```{r}
+n=1000
+n_test = round(.2 * nrow(diabetes_data))
+sens <- spec <- ppv <- npv <- numeric(n)
+
+for(i in 1:n){
+  idx_test = sample(1:nrow(diabetes_data),n_test)
+  train = diabetes_data[-idx_test,]
+  test = diabetes_data[idx_test,]
+  
+  train_model = glm(diabetes ~ pregnant + glucose + bmi + pedigree + age, data = train, family = binomial)
+  pred = predict.glm(train_model,newdata = test, type = "response")
+  pred_classification = ifelse(pred>cutoff_use,1,0)
+  confusion = table(predicted = pred_classification,True = test$diabetes)
+  
+  sens[i] = confusion_matrix[2,2] / (confusion_matrix[2,2]+confusion_matrix[1,2])
+  spec[i] = confusion_matrix[1,1] / (confusion_matrix[2,1]+confusion_matrix[1,1])
+  ppv[i] = confusion_matrix[2,2] / (confusion_matrix[2,2]+confusion_matrix[2,1])
+  npv[i] = confusion_matrix[1,1] / (confusion_matrix[1,1]+confusion_matrix[1,2])
+}
+
+```
+The mean sensitivity after cross validation is `r mean(sens)`. The mean specificity is `r mean(spec)`, mean ppv is `r mean(ppv)` and mean npv is `r mean(npv)`.
+
+
+9. Predict Probability of Diabetes when pregnant= 1, glucose= 90, diastolic=
+62, triceps= 18, insulin= 59, bmi= 25.1, pedigree= 1.268 and age= 25. The predicted probability of diabetes according to the model is 0.087. That probability is below the chosen cutoff, so I would not predict that this individual has diabetes based on the model.
+
+
+```{r}
+predict.glm(model,newdata = data.frame(pregnant= 1, glucose= 90, diastolic=
+62, triceps= 18, insulin= 59, bmi= 25.1, pedigree= 1.268, age= 25),type = "response")
+```

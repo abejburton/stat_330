@@ -1,0 +1,72 @@
+---
+title: "330 HW 7"
+author: "Abe Burton"
+date: "3/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+snow = read.csv("/Users/abrahamburton/Downloads/snow_core.csv",header = TRUE, stringsAsFactors = TRUE)
+
+library(ISLR)
+library(ggplot2)
+library(splines)
+library(xtable)
+```
+1. The purpose of this analysis is to model snow density as a function of depth, taking into account the core that the measurements come from. Snow density is an important way of tracking fresh water changes and understanding the state of ice in Antarctica. A good model could be used for prediction about snow density and by extension, water and ice in Antarctica. It could also be used for inference about the effect of depth on snow density, and the relative characteristics and effects of different core sites.
+
+
+2.  The dependent variable is the average snow density for a 2 cm section of the core. The explanatory variables are an indicator for the core the measurement came from, and depth.
+
+3. The model without an interaction has an $R^2$ of 0.8094 and an AIC of -50348.49. With an interaction between core and depth the $R^2$ is 0.832 and the AIC is -51851.09. This means that in the first model, 0.8094 of the variation in density is explained by the core and depth. For the second model, 0.832 of the variation in density is explained by core, depth, and their interaction. The $R^2$ is higher for the interaction model and the AIC is lower than the other model. That means that it explains more variation as shown by $R^2$ and the AIC shows that it is still better even with added parameters in the model.
+```{r}
+
+lm <- lm(Density ~ factor(Core) + Depth,data = snow)
+lm_int <- lm(Density ~ factor(Core)*Depth, data=snow)
+
+summary(lm)$r.squared
+summary(lm_int)$r.squared
+AIC(lm)
+AIC(lm_int)
+```
+
+4. The AIC is -55594.03 for the polynomial regression with no interaction. It has an $R^2$ of 0.8763522 which is the proportion of the snow density variation that is explained by the core factors and polynomial form of depth. The AIC for the polynomial model with an interaction is -57519.7. The $R^2$ is 0.8951691 which is the amount of variation in snow density that is explained by the covariates of core, depth, and their interactions when depth is fitted with polynomials.
+```{r}
+lm_poly_cubic = lm(Density ~ factor(Core) + poly(Depth,degree = 3), data = snow)
+lm_poly_cubic_interaction = lm(Density ~ factor(Core)*poly(Depth,degree = 3), data = snow)
+summary(lm_poly_cubic)$r.squared
+summary(lm_poly_cubic_interaction)$r.squared
+AIC(lm_poly_cubic)
+AIC(lm_poly_cubic_interaction)
+```
+
+5. The AIC is -55616.3 for the spline regression with no interaction. It has an $R^2$ of 0.8765993 which is the proportion of the snow density variation that is explained by the core factors and spline form of depth. The AIC for the spline model with an interaction is -57771.92. The $R^2$ is 0.8975617 which is the amount of variation in snow density that is explained by the covariates of core, depth, and their interactions when depth is fitted with splines at each core.
+```{r}
+lm_spline_cubic = lm(Density ~ factor(Core) + bs(Depth,knots = quantile(Depth,c(0.5)), degree = 3), data = snow)
+lm_spline_cubic_interaction = lm(Density ~ factor(Core)*bs(Depth,knots = quantile(Depth,c(0.5)), degree = 3), data = snow)
+summary(lm_spline_cubic)$r.squared
+summary(lm_spline_cubic_interaction)$r.squared
+AIC(lm_spline_cubic)
+AIC(lm_spline_cubic_interaction)
+```
+6. PRESENT BEST MODEL. The cubic spline with interaction has the lowest AIC and highest $R^2$ making it the best model with the best fit and prediction capabilities. In this model, each core site has a unique cubic spline used. There is a knot at the median of depth 8.66 meters and different cubic polynomials on either side of the knot. A disadvantage of this model is that there are lots of parameters to fit but there is lots of data so that's not a big deal. It is also pretty hard to interpret spline coefficients. A big benefit is that each core gets a curve which leads to more accuracy. The spline method offers more flexibility than a polynomial. This model allows for prediction when you know covariate values and allows for inference about depth and density.
+
+7. INTERPRET $\hat{\beta_0}$ of 0.365463. It is the estimated average snow density in core one at a depth of zero meters.  
+
+```{r , include=FALSE}
+quantile(snow$depth,.5)
+median(snow$Depth)
+head(snow)
+model.matrix(lm_spline_cubic_interaction)[1,]
+```
+
+8. PLOT CORE =1 and model fit to show it's capturing what we want. The line follows the data pretty well so it looks like the snow density curve is being captured well by the model.
+```{r}
+pred = predict.lm(lm_spline_cubic_interaction) #list of XBetahats
+
+par(mar = c(5,5,3,1))
+plot(snow$Depth[snow$Core == 1],snow$Density[snow$Core==1],pch = 20, col = "black", cex = 0.5, xlab = "Depth (m)", ylab = expression(paste("Density (",g/cm^3,")")),cex.lab = 1.6,main = "Predicted vs. Observed Core 1")
+
+lines(snow$Depth[snow$Core==1], pred[snow$Core==1], col = "red",lwd=2)
+```

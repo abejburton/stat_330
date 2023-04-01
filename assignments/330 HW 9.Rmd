@@ -1,0 +1,75 @@
+---
+title: "338 HW 9"
+author: "Abe Burton"
+date: "4/6/2021"
+output: html_document
+---
+
+```{r, echo=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+load("/Users/abrahamburton/Downloads/Bikes.Rdata")
+
+library(bestglm)
+library(ggplot2)
+library(tidyverse)
+library(car)
+library(knitr)
+```
+
+1. CEO's want to be able to predict the amount of bike rental demand so that they can meet population needs effectively as a company. Environmental and seasonal data can predict bike demand by creating estimates of the dependent variable of bike rentals. It will also allow for inference based on the covariates, and confidence intervals of the effects of covariates. Since the data is count data, a poisson regression is preffered because it can adjust to different amounts of count data and their distributions. 
+
+2. Traditional multiple linear regression models have limitations that are fixed by using a poisson regression. In count data, errors won't be normal, linearity could be violated, predictions will be outside of the data support for y, and equal variance probably isn't true. The fact that MLR allows for non-count data means that normality will be violated. MLR could be approximately true, but poisson distribution regression fixes these problems and is more accurate.
+
+3. I used AIC for variable selection because we are primarily concerned with predicting bike counts and not inference about the variables. AIC is better for prediction than BIC because it is derived for cross validation and we want to predict. Cross validation as a criterion wouldn't work as well when factors have more than 2 levels. The exhaustive algorithm will check all possible models. We select every covariate which are are summer, fall, winter, 2012, holiday, working day, misty, precip, temp, hum, and windspeed.
+
+```{r}
+var_select = bestglm(bikes,IC="AIC",family=poisson,
+                     method = "exhaustive")$BestModel
+
+summary(var_select)
+```
+
+4. $log(\mu_i) = \beta_0 + \beta_1summer_i + \beta_2fall_i + \beta_3winter_i + beta_42012_i + \beta_5holiday_i + beta_6workingday + \beta_7misty + \beta_8precip + \beta_9temp + \beta_{10}hum + \beta_{11}windspeed$
+
+$Y_i \overset{ind}{\sim} \text{Pois}(\mu_i)$
+
+$Y_i$ is the counts of bikes rented and $x_{i1} ... x_{ip}$ are the covariates. $\mu_i$ is the mean count of the response variable.
+
+Assumptions:
+Linear in log-mean: The relationship between the mean and the covariates is log-linear. The is shown below using the added variable plots. The linearity assumption appears to hold excpet the season variables seem strange. Since the seasons are dummy variables there is no way to change the variable to fit the assumption better.
+
+Independence: We assume the data are independent. This migh be true if the covariates explanatory power make the data independent. This might not be true because the data is time-series data.
+
+Poisson Distributed: We assume the count data comes from a poisson distribution.
+
+```{r}
+avPlots(var_select)
+```
+
+5. The model was fit previously using bestglm. We are 95% confident that holding all else constant the mean of bicycle counts increases by a factor of between (1.579,1.587) when the year is 2012 compared to 2011.
+
+```{r}
+
+CI = confint(var_select)
+mu_CI = exp(CI) #at the mean level
+kable(mu_CI)
+
+
+```
+
+6. The predicted average number of bikes rented is estimated to be 3066.86. We are 95% confident that the mean of days with the shared attributes in this prediction data is in the interval (3055.592,3078.170). 
+
+```{r}
+dat_pred =  data.frame(season="Spring", yr="2012", holiday="No", workingday="Yes",
+weathersit="Misty", temp=0.34, hum=0.80, windspeed=0.18)
+prediction = predict.glm(var_select, newdata=dat_pred,se.fit=TRUE)
+
+CI_mean = prediction$fit+ c(-1,1) * qnorm(1 - 0.05 / 2) * prediction$se
+
+exp(prediction$fit)
+exp(CI_mean)
+
+
+```
+
+

@@ -1,0 +1,51 @@
+---
+title: "330 HW1 Code"
+author: "Abe Burton"
+date: "1/26/2021"
+output: html_document
+---
+
+```{r setup}
+#Set working directory and load data set
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+wind <- read.delim("/Users/abrahamburton/Downloads/windmill.txt", header = T, stringsAsFactors = F,sep = " ")
+```
+
+
+```{r}
+#Calculate summary statistics, create a scatter plot with a line through it. Calculate correlation and covariance.
+summary(wind)
+plot(wind$RSpd, wind$CSpd, xlab="Reference Speed", ylab="Candidate Speed")
+scatter.smooth(wind$RSpd,wind$CSpd,xlab="Reference Speed",ylab="Candidate Speed")
+cor(wind$CSpd,wind$RSpd)
+cov(wind$CSpd,wind$RSpd)
+```
+
+```{r}
+#Fit the model, run the regression and then show the model output and coefficients
+wind.lm <- lm(wind$CSpd~wind$RSpd)
+
+summary(wind.lm)
+summary(wind.lm)$sigma
+wind.lm$coefficients
+```
+```{r}
+#plot the data with the regression line
+plot(wind$CSpd,wind$RSpd,xlab="Reference Wind Speed",ylab="Candidate Wind Speed")
+abline(a=wind.lm$coef[1],b=wind.lm$coef[2],lwd=3,col="green")
+```
+\begin{document}
+L(\beta_{0},\sigma^2)=\prod_{i = 1}^{N} \frac{1}{\sqrt{2\pi\sigma^2}}e^{\frac{-1}{2\sigma^2}(Y_{i}-\beta_{0})^2}$
+$=(2\pi\sigma^2)^{\frac{-N}{2}}e^{\frac{-1}{2\sigma^2}\sum_{i = 1}^{N}(Y_{i}-\beta_0)^2}$
+$l(\frac{\partial}{\partial (\beta_{0},\sigma^2)})\propto \frac{-N}{2}ln(\sigma^2)-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$=0-\frac{1}{2\sigma^2}\sum_{i}^{N}-2(Y_{i}-\beta_{0})=0$
+$N\overline{Y}=N\beta_{0}$
+$\hat{\beta_{0}}=\overline{Y}$
+
+For $\sigma^2$ the derivation for the estimate is:
+$l(\frac{\partial}{\partial (\sigma^2)})= \frac{-N}{2}ln(\sigma^2)-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$= \frac{-N}{2\sigma^2}-\frac{1}{2\sigma^2}\sum_{i=1}^{N}(Y_{i}-\beta_{0})^2=0$
+$=\frac{N}{2\sigma^2}*\frac{2(\sigma^2)^2}{1}=\sum_{i}^{N} (Y_{i}-\beta_{0})^2$
+$\sigma^2=\frac{1}{N}\sum_{i}^{N}(Y_{i}-\hat\beta_{0})^2$
+$\hat{\beta_{0}}=\overline{Y}$
+

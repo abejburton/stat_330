@@ -1,0 +1,134 @@
+---
+title: "330 HW 3"
+author: "Abe Burton"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(root.dir ="/Users/abrahamburton/Downloads" )
+water <- read.table("/Users/abrahamburton/Downloads/water.txt",header=TRUE)
+library(ggplot2) 
+library(MASS)
+library(lmtest)
+library(normtest)
+```
+
+1. City water planners have an interest in predicting how much water from runoff will be available in a year so that they can plan water allocation and plan to supplement their water supplies when necessary. A main source of runoff is precipitation, so data for both runoff and precipitation would create a good model for predicting available water. A simple linear regression will allow for prediction and confidence intervals for that could be used by planners in their projections for the year.
+
+2. A scatter plot of the data appears to show that the relationship between precipitation and runoff is strong, positive, and linear. The correlation is high at 0.938436 and there doesn't appear to be any obvious outliers or skew that would cause concern over fitting a linear model to this data.
+```{r}
+scatter.smooth(water$Precip,water$Runoff)
+cor(water$Precip,water$Runoff)
+summary(water)
+```
+3. A potential model for this data could be $log(Y_{i})=\beta_{0}+\beta_{1}x_{i}+\epsilon_i$ where log(Y) is the natural log of acre-feet of runoff in the Bishop river, and x is the amount of snowfall in inches in the Sierra Nevadas. $\beta_{0}$ is the average runoff when there is zero precipitation, and $\beta_1$ is the percent change in runoff acre-feet when there is a one inch change in snowfall. $\epsilon$ is the error term for the difference between $\beta_{0}+\beta_{1}x_{i}$ and log(Y). After fitting this model, predictions, confidence intervals, and hypothesis testing could be done to estimate the runoff in different ways. These estimates would give city planners what they need to create water policy.
+
+4. The fitted model would be $\log\hat{(Y_{i})}=\hat{\beta_{0}}+\hat{\beta_{1}}x_{i}$. After creating the model we input the estimated parameters and get $log(\hat{Y_{i}})=10.604008+0.044976x_i$. $log(\hat{Y_{i}})$ is the estimated average percent change in runoff, 0.604008 is the estimated mean runoff in acre-feet when there is zero precipitation, and 0.044976 is the estimated percent increase in runoff when precipitation increases by one inch. The data is plotted on the transformed scale and then on the original scale with the model used above:
+
+```{r}
+water_lm <- lm(log(Runoff) ~ Precip, data=water)
+summary(water_lm)
+plot(water$Precip, log(water$Runoff))
+abline(a=water_lm$coefficients[1],b=water_lm$coefficients[2], col="red")
+
+plot(water$Precip,water$Runoff)
+pred_precip = seq(min(water$Precip),max(water$Precip))
+preds_transform = water_lm$coefficients[1]+water_lm$coefficients[2]*pred_precip
+preds_orig = exp(preds_transform)
+lines(pred_precip,preds_orig,lwd=3,col="red")
+
+```
+
+5. Model Assumptions:
+Linear: There is a strong positive linear relationship between the variables as can be seen in a scatterplot and is confirmed by the residual and fitted values plot.
+
+Independent: Errors are independent of each other and the covariates. Scatterplots of the errors on the covariates and the fitted values confirm this and could also be verified by regressing the errors on the covariates.
+
+Normal: The errors are normally distributed. A histogram of the standardized errors appears approximately normal. The data is not proven nonnormal by either Kolmogorov-Smirnov test or a Jarque-Bera test. The log transform of the original Y data helped normalize the data and so the data will have to be replotted on the original scale later. There are also no extreme outliers that could skew the data even though there are a few detected outliers.
+
+Equal variance: There is equal variance for all $\epsilon$. A Breusch-Pagan test shows that there is not enough evidence to prove heteroskedasticity.
+
+All the assumptions for linear regression are met.
+```{r}
+
+#linearity
+scatter.smooth(water$Precip,log(water$Runoff))
+
+
+#Independent errors
+plot(water_lm$fitted.values,water_lm$residuals,
+     pch=20)
+
+abline(a=0,b=0,lwd=2,col = "red",lty = 3)
+
+plot(water$Precip,water_lm$residuals,
+     pch=20)
+
+abline(a=0,b=0,lwd=2,col = "green",lty = 3)
+
+#Normality
+std_res = stdres(water_lm)
+hist(std_res,freq = FALSE, breaks = 15)
+curve(dnorm,from = -4,to = 4,add = TRUE,
+      col = "red")
+ks.test(std_res,"pnorm")
+qqnorm(std_res,pch=20)
+abline(a=0,b=1)
+normtest::jb.norm.test(std_res)
+cd = cooks.distance(water_lm)
+plot(cd,type="h")
+outliers = which(cd>(4/nrow(dist)))
+water[outliers,]
+#Equal Variance
+bptest(water_lm)
+```
+6. The r-squared for the model is 0.8378 which is fairly high. That is the amount of the variation in runoff from the data that can be explained by changes in precipitation. That means the fit of this model is pretty good. In order to assess predictive capability, cross validation is used in the code below. The mean bias is -28.11647 which is small and accurate compared to the range from 41785 to 146345. The mean root predicted mean square error is 10569.87 which is less than half of the standard deviation for the data 25518.91. This means that the predictions from the model are very accurate compared to the range and variation in the data.
+
+```{r}
+set.seed(1)
+n_test = 4
+n_cv = 1000
+bias_log = numeric(n_cv)
+rpmse_log = numeric(n_cv)
+
+for(i in 1:n_cv){
+  
+  test_obs = sample(1:nrow(water),n_test)
+  test_water = water[test_obs,]
+  train_water = water[-test_obs,]
+  train_lm = lm(log(Runoff)~Precip,data=train_water)
+  test_preds = exp(predict.lm(train_lm,newdata=test_water))
+  bias_log[i] = mean(test_preds-test_water$Runoff)
+  rpmse_log[i] = sqrt(mean((test_preds-test_water$Runoff)^2))
+  
+}
+
+mean(bias_log)
+mean(rpmse_log)
+range(water$Runoff)
+sd(water$Runoff)
+
+```
+7. To test whether there is a relationship between precipitation and runoff, a test should be done for the slope of precipitation.
+$H_{0}: \beta_{1}=0$ and $H_{a}: \beta_{1}\neq0$. The t-statistic for this test is 14.55 which means the p-value of 2.2e-16 is less than the alpha of .05 and we can reject the null that there is no relationship between the two variables. This test shows that precipitation has a nonzero effect on runoff.
+
+8. 95% confidence intervals for $\beta_{0}$ and $\beta_{1}$ respectively are (10.51086539,10.697149988), and (0.03873344, 0.05121838). This means that we are 95% confident that the average runoff percent change when precipitation is zero is between 10.51086539 and 10.697149988 over the period measured which is the interpretation for $\beta_0$. For $\beta_{1}$ the interpretation is that we are 95% confident that a one inch increase in precipitation leads to a percent change in runoff between 0.03873344 and 0.05121838 on average. 
+
+To convert these numbers from percent change to actual runoff, you would just take e and put the prediction in the exponent. I didn't perform that inverse transformation here because the parameters originally estimated by my model were the transformed version and units weren't specified in the question. The inverse transform technique will be used in the next question.
+```{r}
+confint(water_lm)
+```
+9. The prediction should use this model $\hat{Y_{i}}=e^{10.604008+0.044976x}$ to get an answer in terms of acre-feet of runoff instead of percent change. The predicted $\hat{Y}$ value is 49335.5. A 95% prediction interval is (37768.35,64445.27). That means that we are 95% confident that if there were 4.5 inches of precipitation that the acre-feet of runoff in the given year would be between those two values.
+
+A precipitation level of 4.5 is outside of the range of the data which means that estimating using that value for precipitation is exptrapolation. The model may not apply because data outside of the ovserved range could be nonlinear, skewed, or simply follow a different slope. I would expect this prediction to actually be more biased than simple hypothesis testing would suggest because the assumption of normality may not be met in order to use this kind of test. If the data isn't normal outside of this range than these tests would be useless because a t-distribution wouldn't apply.
+
+```{r}
+
+pred.pred <- predict.lm(water_lm,newdata=data.frame(Precip=4.5),
+                   interval="prediction",level=0.95)
+print(pred.pred)
+print(exp(pred.pred))
+range(water$Precip)
+
+```

@@ -1,0 +1,146 @@
+---
+title: "330 HW 10"
+author: "Abe Burton"
+date: "4/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+studio <- read.csv("/Users/abrahamburton/Downloads/StudioC.csv", header = TRUE)
+library(forecast)
+```
+
+1. BYU executives have an interest in knowing how popular their shows like Studio C will be so they can decide which shows to keep, which shows to cancel, and where to put their funding. A time series statistical model can show the popularity trend over time and make predictions using data of what will happen in the future. A time series can take into account autocorrelation which is important for predictions over time. After building this model, executives could look at the next season or future period they are considering funding, and have a good prediction of popularity based on past popularity to use in their decision.
+
+2. Time Series Plot:
+
+Based on the ACF plot, there appears to be a significant amount of autocorrelation lasting almost all the way until 30 lags and it appears to have seasonality. This is concerning because it creates potential to violate independence in MLR if time is not taken into account as a factor. This is because of autocorrelation. There may be seasonality present since there is a repeating pattern around each season and there is autocorrelation that appears seasonal as well. In general, a 26 week season would suggest seasonality should be accounted for.
+
+```{r}
+par(mar = c(5,5,1,1))
+plot(studio$Week,studio$Google_index,type = "l",
+     ylab = "Google Index",xlab = "Week",cex.lab = 1.4)
+abline(v=(1:4)*26-14,col = "red")
+
+forecast::Acf(studio$Google_index,main = "",cex.lab = 1.4,
+              lag.max = 30,ylab = "ACF")
+
+
+```
+
+3. Model Construction and Comparison:
+
+The best model after running all of them is the sarima model because it has the lowest AIC of 531.63. This is because it includes seasonality in the model to match the data better. I used AIC because AIC was derived for prediction and asymptotically approximates leave one out cross validation. The best model is the sarima(1,1,1)X(1,1,1)$_{26}$ because it has the lowest AIC. This means the time series is probably non stationary and seasonal.
+
+```{r}
+pop_ts = ts(studio$Google_index,frequency = 26) #don't need this. could just do studio$google_index directly in the models. but this is good
+
+ar1 = forecast::Arima(pop_ts,order = c(1, 0, 0))
+ma1 = forecast::Arima(pop_ts,order = c(0, 0, 1))
+arma1 = forecast::Arima(pop_ts,order = c(1, 0, 1))
+arima1 = forecast::Arima(pop_ts,order = c(1, 1, 1))
+sarima1 = forecast::Arima(pop_ts,order = c(1, 1, 1),
+                              seasonal = list(order = c(1,1,1),period = 26))
+
+
+ar1$aic
+ma1$aic
+arma1$aic
+arima1$aic
+sarima1$aic
+
+
+```
+
+4. Plot and Fit
+
+The fitted lines appear to follow the data pretty well and the AIC is low which means this model will give decent predictions.
+```{r}
+par(mar = c(5,5,1,1))
+plot(studio$Week,studio$Google_index,pch = 20,
+     ylab = "Google Index",xlab = "Week")
+
+lines(studio$Week,sarima1$fitted,col = "red",lty = 1,lwd = 2) 
+legend("topleft",c("data","fitted"),col = c("black","red"),lwd=c(NA,4),pch=c(20,NA),cex=2)
+
+summary(sarima1)
+
+```
+
+5. Assumptions
+
+There are no covariates so linearity doesn't matter.
+
+Independent Residuals: We assume after fitting the ts model that $\epsilon_t$ are independent. The residuals appear to be independent in after fitting the time series model as shown by the lack of autocorrelation in the plot below.The model isn't fully initialized until after the first season so we can argue this still holds even with some peaks in the ACF.
+```{r}
+Acf(sarima1$residuals)
+```
+
+Normality: The residuals in the model appear to be approximately normal. It isn't perfect, but there is limited data so this is good enought to assume normality.
+```{r}
+
+#stdres() doesn't interface with the arima function
+hist(sarima1$residuals[-c(1:26)]/sd(sarima1$residuals[-c(1:26)]),
+     freq = FALSE,breaks = 20)
+curve(dnorm(x),from = -4,to = 4,add = TRUE)
+
+qqnorm(sarima1$residuals[-c(1:26)]/sd(sarima1$residuals[-c(1:26)]))
+abline(0,1,col = "red",lwd = 2,lty = 2)
+```
+
+Equal Variance: The fitted versus residuals plot doesn't appear to show heteriscedasticity so the equal variance assumption seems to be met.
+
+
+In general, I'm comfortable with the assumptions because they seem to be met even though normality is approximate.
+
+```{r}
+#fitted versus residuals
+plot(c(sarima1$fitted[-(1:26)]),c(sarima1$residuals[-(1:26)]), pch=19) #the c() vectorizes it so it doesn't preserve order (ts)
+abline(h=0, col = "red")
+
+```
+
+6. Cross Validation
+
+The RPMSE of 8.527953 is much smaller than the standard deviation of 23.03799, and the bias of -3.37408 is small relative to the 92 point range. This is good evidence that the sarima1 model predicts well as shown by the improvements of those estimates over the data characteristics.
+
+```{r}
+## Subset the data
+
+pop.test = pop_ts[76:101]
+pop.train = pop_ts[1:75]
+
+## Fit model to subset of the data
+
+train.mod = forecast::Arima(pop.train,
+                            order = c(1, 1, 1),
+                            seasonal = list(order = c(1,1,1),period = 26))
+
+## Forecast
+#h = steps ahead
+
+prediction = forecast::forecast(train.mod,h = 26)
+
+
+par(mar = c(4,4,1,1))
+plot(prediction,xlab = "Week",ylab = "Popularity",cex.lab = 1.4)
+points(studio$Week,studio$Google_index)
+
+## calculate errors/bias
+
+sqrt(mean((pop.test - prediction$mean)^2)) ### RPMSE
+mean(prediction$mean - pop.test)           ### bias
+sd(studio$Google_index)
+range(studio$Google_index)
+```
+
+7. Prediction and Graph
+
+The graph below shows my predictions for the popularity of Studio C over the next 26 week season 5.
+
+```{r}
+
+seasonfive = forecast(sarima1, h=26)
+plot(seasonfive)
+```

@@ -1,0 +1,133 @@
+---
+title: "330 Final"
+author: "Abe Burton"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads", warning=FALSE, message = FALSE )
+titanic = read.csv("/Users/abrahamburton/Downloads/Titanic_complete.csv", header = TRUE, stringsAsFactors = TRUE)
+titanic$Pclass = factor(titanic$Pclass)
+library(knitr)
+library(car)
+library(bestglm)
+library(pROC)
+library(ggplot2)
+```
+1. The response or outcome of interest is a binary variable indicating whether an individual survived or not. Covariates are: ticket class, sex, age, number of siblings and spouses, number of parents and children, passenger fare, and embarkation port.
+
+2. The goal is to understand through inference which factors influence the probability of survival on the Titanic. In order to do this, a logistic regression model is preferrable since it is used for binary outcomes by using a bernoulli distribution in a generalized linear model. A traditional MLR model would give probabilities outside of 0 and 1 and wouldn't have normal errors and likely would violate linearity and equal variance. Logistic regression allows us to use a bernoulli distribution and create predictions of the log-odds of survival and estimate the effect of covariates on those odds. This can be turned into estimates of probability which allows for results and inference from the model to be easily interpretable which is the goal in the end.
+
+3. 
+
+  a)I decided to use BIC since the goal of this analysis is inference. AIC would be better for prediction, but that is not what I care about for this project. Cross validation can't be used when there are categorical variables with more than two levels as is the case in this dataset.
+
+  b) For BIC, the lower the score, the better. A score gets lower the higher the log-likelihood gets, but higher the more parameters are included. So there is a tradeoff between fitting the model better, and punishing the model for including more variables and increasing model complexity. The formula, for reference, is -2(log-likelihood) + ln(n)(# of parameters).
+```{r, message=FALSE}
+var_select = bestglm(titanic,IC="BIC",family=binomial,
+                     method = "exhaustive")
+model = var_select$BestModel
+summary(model)
+```
+   c) The best model based on BIC and an exhaustive approach algorithm is: $\log(\frac{p_i}{1-p_i}) = \beta_0 + \beta_1(\text{Pclass}_i = 2) + \beta_2(\text{Pclass}_i = 3) + \beta_3(\text{Sex}_i = \text{Male}) + \beta_4\text{Age}_i + \beta_5\text{SibSP}_i$ Where $Y_i \overset{ind}{\sim} \text{Bernoulli}(p_i)$ and $Y_i$ is a binary variable indicating whether an individual survived or not. Covariates are indicators for ticket class with class 1 as the reference group, Sex with Female as the reference group, Age, and number of siblings and spouses.
+
+4. Model Assumptions:
+
+Linearity in log odds: The log odds of diabetes are linear with respect to the covariates, or probability is monotone.
+The Added variable plots show that the general trends are approximately linear, but there appears to be distinct trends for different groups. This may be caused by interaction effects or some left out factor. A nonlinear estimation for some of the variables also seems reasonable. The overall probability graphs check for monotone changes in probability, and they don't give a lot of insight. It seems like discrepancies could be within the variance or explained by lack of data for older people. In general, my takeaway is that there is probably a better way to fit this data by testing different kinds of interactions or nonlinearity for these variables even though the checks don't seem to rule out monotone probability.
+```{r, warning=FALSE, message = FALSE}
+#linearity: avplots
+ggplot(titanic,aes(x=Age,y=Survived)) + geom_jitter(width=.5,height=.1) + 
+  geom_smooth() 
+ggplot(titanic,aes(x=SibSp,y=Survived)) + geom_jitter(width=.5,height=.1) + 
+  geom_smooth() 
+
+avPlots(model)
+```
+
+Independence: The response variables are independent given the covariate information available. We can assume that the survival of one individual is independent from the survival of another. This may not be true in the case of families, and in the movie, Jack's death is strongly correlated with Rose's existance... But since there is no covariate data on conditional survival of people based on relationships, it is reasonable to assume independence with what data we have. 
+
+Bernoulli: The data follows a bernoulli distribution. Since the response is a binary variable we can assume this will be the case.
+
+5. The different kinds of models are fitted in the code below.
+
+```{r}
+model.glm = glm(Survived ~ Pclass + Sex + Age + SibSp, data = titanic , family = binomial)
+model.glm.poly = glm(Survived ~ Pclass + Sex + poly(Age,3) + SibSp, data = titanic , family = binomial)
+model.glm.int = glm(Survived ~ Sex*Pclass + Age + SibSp, data = titanic , family = binomial)
+model.glm.int2 = glm(Survived ~ Sex*Pclass + Sex*Age + SibSp, data = titanic , family = binomial)
+
+
+```
+
+The BIC for the models in parts a,b,c, and d respectively are: `r BIC(model.glm)`, `r BIC(model.glm.poly)`, `r BIC(model.glm.int)`, and `r BIC(model.glm.int2)`. The best and lowest BIC is the model.glm.int (c) which has an interaction between sex and ticket class, age and siblings or spouses as covariates.
+
+6. In-Sample Check of model preformance
+```{r}
+
+cutoff = .5
+classification = ifelse(predict.glm(model.glm.int,type = "response")>cutoff,1,0)
+confusion_matrix = table(Predicted = classification, True  = titanic$Survived)
+confusion_matrix
+pred_probs = predict.glm(model.glm.int,type="response")
+  
+roc = roc(titanic$Survived,pred_probs)
+plot(roc,legacy.axes = TRUE)
+auc_calc = auc(roc)
+
+
+## model based estimate
+brier = mean((pred_probs - titanic$Survived)^2)
+
+  
+
+```
+The misclassification rate is `r 1 - sum(diag(confusion_matrix))/sum(confusion_matrix)`
+The sensitivity is `r confusion_matrix[2,2] / (confusion_matrix[2,2]+confusion_matrix[1,2])`
+The specificity is `r confusion_matrix[1,1] / (confusion_matrix[2,1]+confusion_matrix[1,1])`
+The AUC is `r auc(roc)`.
+The Brier Score is `r mean((pred_probs - titanic$Survived)^2)`
+
+
+7. Poly(Age,3) in model.glm.poly means that the model creates a polynomial of degree three and fits the coefficients of the polynomial to the Age data. This means that we are assuming that age is nonlinear and that a cubic polynomial could match the shape of the data better than a linear estimate could. 
+
+8. A t-distribution isn't used because in a GLM like logistic regression, the data aren't assumed to be normal. The data follows a bernoulli distribution, and we assume that the coefficients can be estimated using an asymptotically normal distribution based on the log odds. That means that the z-scores for populations should be used instead of t-scores.
+
+9. $\hat{\beta}_0$ (4.7756) is the estimated average log-odds of survival when all covariates are zero and categorical variables are the reference group. This means that sex is female, ticket class is 1, age and sibsp are both zero. This isn't a very helpful interpretation and if you really wanted an interpretation that made sense, you would need to create a centered model.
+
+10. 
+```{r}
+model.glm.int2 = glm(Survived ~ Sex*Pclass + Sex*Age + SibSp, data = titanic , family = binomial)
+CI = confint(model.glm.int2)                           #### interpretted on log-odds scale
+CI_exp = round(exp(CI),3) #### interpretted on odds scale
+```
+
+A confidence interval for $e^{\beta_5}$ is (`r CI_exp[6,]`). This means that all else being equal, if the number of siblings or spouses increases by one, we are 95% confident that the odds of survival will change at an amount within that interval. The interval is interpreted on the odds scale because of the exponentiated confidence interval.
+
+11. Holding Pclass and SibSp constant, for a one year increase
+in age, what is the expected or average
+```{r}
+kable(model.glm.int2$coefficients)                   #  log odds
+kable(round(exp(model.glm.int2$coefficients),3))     #  odds
+kable(100 * (exp(model.glm.int2$coefficients) - 1))  #  percent change in odds
+```
+
+(a) change in the log-odds of survival.
+
+A one year increase in age has an expected average change in log odds by -0.03405 by itself, but depends on the sex of the person. If the sex is male, the log odds changes by another -0.02694 from the interaction. So if the sex is female, holding Pclass and Sibsp constant, the estimated average log odds change in survival from a one year increase in age is -0.03405. If the sex is male, holding Pclass and Sibsp constant, the estimated average log odds change in survival from a one year increase in age is -0.03405 - 0.02694 which equals -0.06099.
+
+(b) percent change in odds of survival.
+
+To get the percent change in the odds of survival, you just need to exponentiate the responses above, subtract 1, and multiply by 100. So if the sex is female, holding Pclass and Sibsp constant, the estimated average odds change in survival from a one year increase in age is -3.348006. If the sex is male, holding Pclass and Sibsp constant, the estimated average odds change in survival from a one year increase in age is -3.348006 - 2.658455 which equals a -6.006461 percent change in survival odds.
+
+To get a real ceteris paribus comparison, sex should be held constant as male as well, which would give the estimates of -0.06099 and -6.006461 for the log odds and percent change odds respectively by combining the individual and interaction effects of age and age:sex=male.
+
+12. For a fixed age and SibSp, what is the estimated change in the log-odds of survival having a thirdclass (Pclass) ticket relative to a first-class ticket if
+(a) the individual is female 
+
+If the individual is female the interaction term for Pclass3 and Male doesn't apply, so the estimated average change in the log odds is only the coefficient on Pclass 3 of -3.90469.
+
+(b) the individual is male
+
+If the individual is male the interaction term for Pclass and Male applies, so the estimated average change in the log odds is -3.90469 + 1.67645 which is -2.22824.

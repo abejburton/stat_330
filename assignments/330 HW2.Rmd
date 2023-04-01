@@ -1,0 +1,168 @@
+---
+title: "330 HW2"
+author: "Abe Burton"
+date: "2/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+dist <- read.delim("/Users/abrahamburton/Downloads/distance.txt", header = T, stringsAsFactors = F,sep = " ")
+library(ggplot2) 
+library(MASS)
+library(lmtest)
+library(normtest)
+
+```
+
+1. In order to determine the right speed limit for an area it is important to know how fast a car can stop at any speed. By creating a statistical model using the data for speed and stopping distance, we can predict the average stopping distance based on a cars speed at any speed limit. A decision about the speed limit can be made by deciding what stopping distance is ideal in order to keep pedestrians and drivers safe.
+
+2. To see whether the data is good for simple linear regression, I started by plotting the data in a scatter plot. The data appears to follow a slight curve, so I ran more tests based on the residual error after running the regression. After plotting the error on the fitted values of the model and the covariate of driving speed, it appears that simple linear regression would not be a good idea without transformation. The data does not meet the assumption of equal variance because the residual variance increases along the x-axis and the residuals appear to have a pattern that would make the average of the residuals nonzero. On top of that, histograms of the data don't appear to follow a normal distribution very closely and may have outliers. To confirm these graphical conclusions I ran tests to prove this. A Breusch Pagan test showed that the residual variance does increase. Kolmogorov-Smirnov and Jarque-Bera tests showed that the data isn't normal, and a test of Cook's distance for outliers showed multiple outliers. Because this data fails most of the assumptions needed for simple linear regression, running a regression without transforming the data to fit those assumptions would be innapropriate. This is because the predictions and inference based on the model would be incorrect or biased if the assumptions aren't met.
+```{r}
+#Plot data and show correlation
+plot(dist$Speed,dist$Distance,pch=19,xlab="Speed",ylab="Stopping Distance")
+scatter.smooth(dist$Speed,dist$Distance)
+cor(dist$Speed,dist$Distance)
+
+#Fit an SLR Model
+dist_lm = lm(Distance~Speed,data=dist)
+summary(dist_lm)
+## Check Linear & Equal Variance Assumption 
+
+plot(dist_lm$fitted.values,dist_lm$residuals,
+     pch=20,ylim=c(-30,30))
+
+abline(a=0,b=0,lwd=2,col = "red",lty = 3)
+
+#Check zero conditional mean assumption
+plot(dist$Speed,dist_lm$residuals,
+     pch=20,ylim=c(-30,30))
+abline(a=0,b=0,lwd=2,col = "red",lty = 3)
+
+#Breusch-Pagan Test for heteroskedasticity
+lmtest::bptest(dist_lm)
+
+## Check Normality Assumption
+
+std_res = MASS::stdres(dist_lm) ## This is accounting for more than just sigma. standardized residuals
+std_res
+
+hist(std_res,freq = FALSE, breaks = 15)
+curve(dnorm,from = -4,to = 4,add = TRUE,
+      col = "green")
+
+#qq plot again to check normality off errors
+qqnorm(std_res,pch=20)
+abline(a=0,b=1)
+
+ks.test(std_res,"pnorm") # Kolmogorov-Smirnov test
+normtest::jb.norm.test(std_res)  #Jarque-Bera test
+
+## Check to see if there are outliers
+
+cd = cooks.distance(dist_lm)
+plot(cd,type="h")
+outliers = which(cd>(4/nrow(dist)))
+dist[outliers,]
+
+```
+3. A transformed model could adjust the data in a way that meets the assumptions required. One potential model is $\log(Y_{i}) = \beta_{0} + \beta_{1}\log(x_{i})+\epsilon_{i}$. $log(Y_{i})$ is the natural log of the stopping distance, $log(x_{i})$ is the natural log of the speed. The log is what transforms the data to make it fit the assumptions needed. $\beta_{0}$ is the log of the distance when the log of speed equals zero. $\beta_{1}$ is interpreted as the percent change in distance when the percent of speed changes by one. $\epsilon_{i}$ is the error or the difference between the prediction and the actual values. After fitting this model to the data, if it meets the necessary assumptions, it will tell us how the speed affects stopping distance but with an interpretation of percent change. This will allow the same kinds of predictions as the original model, but with more confidence in accuracy.
+
+4. In the code below, I will test the assumptions for this transformed model. 
+Linearity: A scatterplot of the data appears to be linear with a strong positive relationship. 
+
+Independence: Plots of the residuals on the fitted values and covariates show no relationship between the residuals and the covariate values or the predicted values. This means that the model is endogenous and satisfies the zero conditional mean assumtion for independence. 
+
+Normality: A histogram of the standardized errors is more normal than the original model but is still not completely normal. A qq plot confirms this by showing the difference between the values and the theoretical normal values. This is largely due to the outliers that remain in the data after transformation although they are less extreme. Even though this is reason for caution, neither the  Kolmogorov-Smirnov or Jarque-Bera tests for normality show that the the data isn't normal, so I will continue the analysis under that assumption.
+
+Equal Variance: The Breusch-Pagan test checks whether the data is heteroskedastic which is whether the variance of the errors is equal conditional on the covariates. After running the test, it shows that there is not equal variance. This could be corrected for by using White standard errors. This means that hypothesis testing and inference will be limited but shouldn't change the model predictions.
+```{r}
+## Plot log-transformed data
+
+#linearity
+plot(log(dist$Speed),log(dist$Distance),pch=19,xlab="log(Speed)",ylab="log(Distance")
+
+## Fit a log-transformed SLR Model
+trans_lm = lm(log(Distance)~log(Speed),data=dist)
+summary(dist_lm)$r.squared ## R^2 of original model
+summary(trans_lm) ## be careful in interpreting these coefficients since we transformed the data
+
+
+#Independent errors
+plot(trans_lm$fitted.values,trans_lm$residuals,
+     pch=20,ylim=c(-30,30))
+
+plot(dist$Speed,trans_lm$residuals,
+     pch=20,ylim=c(-30,30))
+abline(a=0,b=0,lwd=2,col = "red",lty = 3)
+
+abline(a=0,b=0,lwd=2,col = "red",lty = 3)
+
+#Normality
+std_res = stdres(trans_lm)
+hist(std_res,freq = FALSE, breaks = 15)
+curve(dnorm,from = -4,to = 4,add = TRUE,
+      col = "green")
+ggplot() + geom_density(aes(x=std_res))
+ks.test(std_res,"pnorm")
+qqnorm(std_res,pch=20)
+abline(a=0,b=1)
+normtest::jb.norm.test(std_res)
+cd = cooks.distance(trans_lm)
+plot(cd,type="h")
+outliers = which(cd>(4/nrow(dist)))
+dist[outliers,]
+#Equal Variance
+bptest(trans_lm)
+```
+5. To assess the fit of this transformed model versus the old model, I will check the r-squared values. The new model has an r-squared value of 0.9017345 which is higher than the original one by about .03. When cross validating to find the predictive ability of the model, mean bias of -1.82721 and mean root predicted mean square error of 9.750284 were calculated. That bias is fairly small compared to the range of possible distances from 2 to 138. The root predicted mean square error is much smaller than the standard deviation of 9.75. This means that the model gives predictions that are pretty good since the bias and error are small for the data set.
+
+```{r}
+
+## Assess the fit
+summary(trans_lm)$r.squared ## R^2 is bigger than untransformed model
+summary(dist_lm)$r.squared
+
+## Assess predictive ability of the model (via cross validation) 
+
+
+set.seed(1)
+n_test = 4
+n_cv = 1000
+bias_log = numeric(n_cv)
+rpmse_log = numeric(n_cv)
+
+for(i in 1:n_cv){
+  
+  test_obs = sample(1:nrow(dist),n_test)
+  test_dist = dist[test_obs,]
+  train_dist = dist[-test_obs,]
+  train_lm = lm(log(Distance)~log(Speed),data=train_dist)
+  test_preds = exp(predict.lm(train_lm,newdata=test_dist))
+  bias_log[i] = mean(test_preds-test_dist$Distance)
+  rpmse_log[i] = sqrt(mean((test_preds-test_dist$Distance)^2))
+  
+}
+
+mean(bias_log)
+mean(rpmse_log)
+range(dist$Distance)
+sd(dist$Distance)
+
+coef(trans_lm)
+```
+6. The fitted model would be $\log(\hat{Y_{i}}) = -1.102206 + 1.568061\log(\hat{x_{i}})$. $\log(\hat{Y_{i}})$ is the predicted percent change of the distance, -1.102206 is the predicted average distance when speed is equal to zero, 1.568061 is the predicted percent change in distance for every one percent change in speed, and $\log(x_{i})$ is the percent change in speed. The model could also be written as $\hat{Y_{i}}=e^{-1.102206}x^{1.568061}$. In this case the x and Y hat values are the same interpretation as in the first model, meaning predicted distance to stop and predicted speed while the coefficient and exponent on the x are the effect of a one unit change in x on y. Below is the plot of the regression on the transformed scale which would be the first equation, then on the original scale which is the second equation. 
+```{r}
+## Plot Fitted Regression line on transformed scale
+plot(log(dist$Speed),log(dist$Distance),pch=19,xlab="log(Distance)",ylab="log(Pages)")
+abline(a=trans_lm$coef[1],b=trans_lm$coef[2],lwd=3,col="red")
+
+## Plot of the transformed regression model on original scale of the data
+plot(dist$Speed,dist$Distance,pch=19,xlab="Speed",ylab="Distance")
+pred_Speed = seq(min(dist$Speed),max(dist$Speed),length=100) ## Sequence (seq) of Pages of Advertising that I'm interested in predicting revenue    
+preds_trans = trans_lm$coef[1]+trans_lm$coef[2]*log(pred_Speed) ## Prediction of log(Rev)
+preds_orig = exp(preds_trans) ## Predictions of Revenue
+lines(pred_Speed,preds_orig,lwd=3,col="red") ## Draw "line" on original scale of data
+```
+
+7. At a speed (x) of 35 MPH, the predicted stopping distance would be 87.5966 feet. At 30 MPH the predicted stopping distance would be 68.7877 feet. Given that this is a rural road with lots of homes, it can be expected that there are pedestrians, children playing, and other obstacles in the road frequently. In these scenarios, a short stopping distance is important to save lives and protect drivers from damaged vehicles. In order to prevent that, the 19 foot difference in stopping distance is important, and I would argue that the 35 MPH limit is too high, and the 30 MPH limit should be recommended.

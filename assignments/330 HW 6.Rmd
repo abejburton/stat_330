@@ -1,0 +1,126 @@
+---
+title: "330 HW6"
+author: "Abe Burton"
+date: "3/9/2021"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+gdpdata = read.csv("/Users/abrahamburton/Downloads/gdp_sub.csv",header = TRUE, stringsAsFactors = TRUE)
+
+library(car)
+library(MuMIn)
+library(bestglm)
+library(lmtest)
+library(normtest)
+library(MASS)
+library(knitr)
+```
+1. Economists, particularly macro and labor economists are interested in drivers of productivity and economic growth in countries. This data set includes many variables that could be predictors of GDP growth per capita. An accurate analysis of which factors are helpful in prediction can provide a focus for policymakers and economists for what to improve as well as explaining relationships between economic indicators and growth. A good statistical model could also allow for prediction and inference about the effects of certain changes on GDP growth per capita.
+
+2. Twenty-two of the forty-eight (46%) variables have a variance inflation factor of above ten which is our threshold for considering the variable problematic. This means that these variables are highly collinear. Because of the large amount of collinear variables the model could have large standard errors, difficulty finding sifnificant effects, and bad predictive performance. It could also lead to coefficient estimates that don't make sense.
+
+```{r}
+gdp_lm = lm(y~.,data=gdpdata)
+vif=car::vif(gdp_lm)
+mean(vif>10)
+kable(vif)
+```
+3. Variable selection with 48 possible variables can be difficult because there are so many potential options of models to use ($2^{48}$). Because of this, an exhaustive search is difficult. There are few observations which also makes it difficult to estimate so many parameters. Possible approaches for variable selection are forward, backward, and hybrid.
+
+4. I think that at least for initial analysis, Economists would be interested in inference rather than prediction. This is because accurate predictions of something as complex as GDP per capita growth is a very difficult task that would require much more data and variables than are available. Inference would allow effects of variables to be estimated along with their properties. Since inference is the most helpful strategy here, I will use the Bayesian Information Criterion which is helpful for inference. 
+```{r}
+X = model.matrix(gdp_lm)
+y = gdpdata$y
+Xy = cbind(X,y)
+colnames(Xy)
+Xy = data.frame(Xy)
+Xy=subset(Xy,select = -c(1))
+
+xy_gdp = gdpdata[,c(2:ncol(gdpdata),1)]
+
+# check to see if I did this right. Xy==xy_gdp
+
+variable_select = bestglm(Xy,IC="BIC",method="seqrep",TopModels=5)
+my.best.lm = variable_select$BestModel
+
+plot(variable_select$Subsets$BIC,type="b",pch=19,xlab="# of Vars",ylab="BIC")
+summary(variable_select$BestModel)
+```
+5. A model based on the variable selection above would be: $y = \beta_0 +\beta_1 AVELF_i  +\beta_2 CIV72_i +\beta_3 DENS60_i +\beta_4 DENS65C_i +\beta_5 EAST_i +\beta_6 GDPCH60L_i +\beta_7 IPRICE1_i +\beta_8 P60_i +\beta_9 PRIGHTS_i +\beta_{10} TROPICAR_i+ \epsilon_i$ Where $\epsilon_i \overset{iid}{\sim} N(0,\sigma^2)$. The ten variables selected through hybrid BIC represent the following: 
+
+AVELF Average of five different indices of ethnolinguistic fractionalization which is the probability
+of two random people in a country not speaking the same language.
+
+CIV72 Index of civil liberties index in 1972.
+
+DENS60 Population per area in 1960.
+
+DENS65C Coastal (within 100 km of coastline) population per coastal area in 1965.
+
+EAST Dummy for East Asian countries.
+
+GDPCH60L Logarithm of GDP per capita in 1960.
+
+IPRICE1 Average investment price level between 1960 and 1964 on purchasing power parity basis
+
+P60 Enrollment rate in primary education in 1960.
+
+PRIGHTS Political rights index.
+
+TROPICAR Proportion of country’s land area within geographical tropics.
+
+y Growth of GDP per capita at purchasing power parities between 1960 and 1996.
+
+$\epsilon$ is the residual error or the amount the variables are off from y. 
+
+i indexes the observation level of country.
+
+The $\beta$ coefficients are the slopes on each variable. 
+
+Assumptions:
+Linearity: Variable relationships are linear.
+Independence: The assumption of independence is that the errors are independent from each other and from the covariates.
+Normality: The standardized residuals should be normal in order for the data to meet the normality assumption
+Equal Variance: The residuals should have expected equal variance conditional on the covariates.
+
+
+
+The interpretation for a quantitative variable is: " For a one point increase on the political rights index, all else being equal, on average GDP growth per capita at purchasing power parity changes by $\beta_9$". For a dummy variable EAST, the interpretation is: "When a country is in East Asia, all else being equal, on average, GDP growth per capita at purchasing power parity changes by $\beta_5$ in comparison to Non East Asian countries" 
+
+After fitting the model to the data, it will give us estimates for $\beta$ values, estimated relationships, and other summary statistics allowing for prediction and inference to be made. We will be able to estimate the effect of the 10 variables on GDP growth, create confidence intervals, and show these effects visually.
+
+
+6. I ran the optimial model by extracting the best model. The confidence interval interpretations are written below and the coefficients and intervals are outputted in a table.
+
+Holding all else constant, we are 95% confident that the on average, GDP growth at per capita at purchasing power parities for countries in east asia is between 1.2431538 and 2.7692081 higher than countries outside of east asia.
+
+Holding all else constant we are 95% confident that when the score on the political rights index increases by one, GDP growth per capita changes between -.5372174 and -.1135367 on average. That is counterintuitive so it would be nice to explore that further in some way.
+
+```{r}
+opt_model = lm(y ~ AVELF + CIV72 + DENS60 + DENS65C + EAST + GDPCH60L + IPRICE1 + P60 + PRIGHTS + TROPICAR ,data = gdpdata)
+summary(opt_model)
+kable(cbind(coef(opt_model),confint(opt_model)))
+
+
+
+```
+7. Assumption Checks.
+
+The added variable plots appear to show generally linear relationships so the linearity assumption is met. There isn't really a good way to test for independence in this case and it might be an issue because of multicollinearity. A residuals versus fitted values plot could give some insight, but isn't perfect. We will just be careful about that assumption since we aren't completely confident in it. JB and KS tests both fail to reject that the residuals come from a normal distribution so the normality assumption is met. The BP test fails to reject homoskedasticity so the equal variance assumption is also met.
+
+```{r}
+#linearity
+avPlots(opt_model)
+#ind: not really a good one and it might be an issue
+
+#normality
+jb.norm.test(stdres(opt_model))
+ks.test(stdres(opt_model),"pnorm")
+
+#equal variance
+bptest(opt_model)
+```
+
+8. The $R^2$ for the model is 0.7877 which is the proportion of the variance in GDP growth per capita that is explained by the model.This is a little lower than including all the models, but has a higher adjusted $R^2$ and removes many of the complications of multicollinearity. The $R^2$ is pretty high which means the fit of the model is good and has high explanatory power.

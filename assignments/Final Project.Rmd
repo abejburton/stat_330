@@ -1,0 +1,254 @@
+---
+title: "Final Project"
+author: "Abe Burton"
+date: "12/9/2019"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(knitr)
+```
+
+
+
+```{r}
+DomainA <- read.csv("Data.and.Domains/Domains FormA.csv", header = TRUE, stringsAsFactors = FALSE)
+DomainB <- read.csv("Data.and.Domains/Domains FormB.csv", header = TRUE, stringsAsFactors = FALSE)
+FormA <- read.csv("Data.and.Domains/FormA.csv", header = FALSE, stringsAsFactors = FALSE)
+FormB <- read.csv("Data.and.Domains/FormB.csv", header = FALSE, stringsAsFactors = FALSE)
+```
+
+
+
+```{r}
+
+#see which answers are correct
+
+equalA <- mapply("==", FormA[-1,-1],FormA[1,-1])
+equalB <- mapply("==", FormB[-1,-1],FormB[1,-1])
+
+#calculate number and percentage correct for each student
+
+student_correctA <- apply(equalA,1,sum)
+student_meanA <- apply(equalA,1,mean)
+
+student_correctB <- apply(equalB,1,sum)
+student_meanB <- apply(equalB,1,mean)
+```
+```{r}
+
+#creates a data frame that has the id,number, and percentage correct per student
+
+studentA <- data.frame(Student_ID=FormA[-1,1],stringsAsFactors = FALSE)
+studentA$score <- student_correctA
+studentA$percentage <- student_meanA
+
+studentB <- data.frame(Student_ID=FormB[-1,1],stringsAsFactors = FALSE)
+studentB$score <- student_correctB
+studentB$percentage <- student_meanB
+
+
+```
+```{r}
+
+
+#finds the number and percentage correct for each question
+
+qcorrectA <- apply(equalA,2,sum)
+qmeanA <- apply(equalA,2,mean)
+
+qcorrectB <- apply(equalB,2,sum)
+qmeanB <- apply(equalB,2,mean)
+
+#creates a data frame with the question number, number, and percentage correct
+
+questionnumA <- 1:150
+questionA <- data.frame(questionnumA)
+questionA$score <- qcorrectA
+questionA$percentage <- qmeanA
+
+questionnumB <- 1:150
+questionB <- data.frame(questionnumB)
+questionB$score <- qcorrectB
+questionB$percentage <- qmeanB
+
+```
+
+```{r}
+#Merge	the	student	responses	to	the	question	domains.	Use the	question	domain	to	provide	the	student	with	a	measure	of	how	they performed	in	the	five	categories
+
+
+Domain1_correctA <- apply(equalA[,DomainA$Domain..== 1],1,sum)
+Domain2_correctA <- apply(equalA[,DomainA$Domain..== 2],1,sum)
+Domain3_correctA <- apply(equalA[,DomainA$Domain..== 3],1,sum)
+Domain4_correctA <- apply(equalA[,DomainA$Domain..== 4],1,sum)
+Domain5_correctA <- apply(equalA[,DomainA$Domain..== 5],1,sum)
+
+Domain1_correctB <- apply(equalB[,DomainB$Domain..== 1],1,sum)
+Domain2_correctB <- apply(equalB[,DomainB$Domain..== 2],1,sum)
+Domain3_correctB <- apply(equalB[,DomainB$Domain..== 3],1,sum)
+Domain4_correctB <- apply(equalB[,DomainB$Domain..== 4],1,sum)
+Domain5_correctB <- apply(equalB[,DomainB$Domain..== 5],1,sum)
+
+studentA$Domain1Score <- Domain1_correctA
+studentA$Domain2Score <- Domain2_correctA
+studentA$Domain3Score <- Domain3_correctA
+studentA$Domain4Score <- Domain4_correctA
+studentA$Domain5Score <- Domain5_correctA
+
+studentB$Domain1Score <- Domain1_correctB
+studentB$Domain2Score <- Domain2_correctB
+studentB$Domain3Score <- Domain3_correctB
+studentB$Domain4Score <- Domain4_correctB
+studentB$Domain5Score <- Domain5_correctB
+
+#Merge the	student’s	overall	score	with	the	five	domain	scores.		These	domain	scores	help	the	student know	the areas	to	work	on	to	improve	their	overall	score.
+
+studentA$Domain1Percent <- apply(equalA[,DomainA$Domain..== 1],1,mean)
+studentA$Domain2Percent <- apply(equalA[,DomainA$Domain..== 2],1,mean)
+studentA$Domain3Percent <- apply(equalA[,DomainA$Domain..== 3],1,mean)
+studentA$Domain4Percent <- apply(equalA[,DomainA$Domain..== 4],1,mean)
+studentA$Domain5Percent <- apply(equalA[,DomainA$Domain..== 5],1,mean)
+
+studentB$Domain1Percent <- apply(equalB[,DomainB$Domain..== 1],1,mean)
+studentB$Domain2Percent <- apply(equalB[,DomainB$Domain..== 2],1,mean)
+studentB$Domain3Percent <- apply(equalB[,DomainB$Domain..== 3],1,mean)
+studentB$Domain4Percent <- apply(equalB[,DomainB$Domain..== 4],1,mean)
+studentB$Domain5Percent <- apply(equalB[,DomainB$Domain..== 5],1,mean)
+
+
+```
+```{r}
+#add column with form type
+
+studentA_n <- data.frame(studentA,"A", stringsAsFactors = F)
+names(studentA_n) <- c("Student_Id", "score", "percentage", "Domain1Score","Domain2Score","Domain3Score","Domain4Score","Domain5Score","Domain1Percent","Domain2Percent","Domain3Percent","Domain4Percent","Domain5Percent","Form")
+studentA_n$Student_Id <- as.integer(studentA_n$Student_Id)
+
+studentB_n <- data.frame(studentB,"B", stringsAsFactors = F)
+names(studentB_n) <- c("Student_Id", "score", "percentage", "Domain1Score","Domain2Score","Domain3Score","Domain4Score","Domain5Score","Domain1Percent","Domain2Percent","Domain3Percent","Domain4Percent","Domain5Percent","Form")
+studentB_n$Student_Id <- as.integer(studentB_n$Student_Id)
+```
+```{r}
+#combine dataframe A and B then sort them by studentID
+
+student_data <- rbind(studentA_n,studentB_n)
+
+student_data_sort <- student_data[order(student_data$Student_Id),]
+
+#order the columns for the final report
+
+student_data_col <- student_data_sort[,c(1,14,2:13)]
+
+student_data_perct <- student_data_col[,c(1,2,4,3,10:14,5:9)]
+
+#sort by percentage
+
+student_data_perct <- student_data_perct %>%
+  arrange(desc(percentage))
+```
+
+```{r}
+#creates a dataframe with the domains and percentages
+  
+dom1 <- data.frame(student_data_perct[,5],1)
+names(dom1) <- c("percentage","domain")
+
+dom2 <- data.frame(student_data_perct[,6],2)
+names(dom2) <- c("percentage","domain")
+
+dom3 <- data.frame(student_data_perct[,7],3)
+names(dom3) <- c("percentage","domain")
+
+dom4 <- data.frame(student_data_perct[,8],4)
+names(dom4) <- c("percentage","domain")
+
+dom5 <- data.frame(student_data_perct[,9],5)
+names(dom5) <- c("percentage","domain")
+  
+plot_frame <- rbind(dom1,dom2,dom3,dom4,dom5)
+
+#makes a boxplot of percentages by domains
+
+plot <- ggplot(plot_frame, aes(x=domain, y=percentage, group=domain)) +
+    geom_boxplot() +
+  ggtitle("Student Scores By Domain")
+
+
+```
+```{r}
+#sorts and formats the question table
+
+
+#add column with form type and order columns
+
+questionA_n <- data.frame(questionA,"A", stringsAsFactors = F)
+names(questionA_n) <- c("Q_Num", "Score", "Perct.","Form")
+questionA_n <- questionA_n[,c(4,1,3)]
+
+questionB_n <- data.frame(questionB,"B", stringsAsFactors = F)
+names(questionB_n) <- c("Q_Num", "Score", "Perct.","Form")
+questionB_n <- questionB_n[,c(4,1,3)]
+```
+
+```{r}
+
+#combine dataframe A and B then sort them by studentID
+
+q_combined <- rbind(questionA_n,questionB_n)
+
+q_sort <- q_combined %>%
+  arrange(Form) %>%
+  arrange(Q_Num)
+
+q_percent <- q_combined %>%
+  arrange(desc(Perct.))
+q_percent <- q_percent[,c(3,1,2)]
+
+```
+```{r}
+#formatting percentages
+student_data_perct$percentage <- percent(student_data_perct$percentage)
+student_data_perct$Domain1Percent <- percent(student_data_perct$Domain1Percent)
+student_data_perct$Domain2Percent <- percent(student_data_perct$Domain2Percent)
+student_data_perct$Domain3Percent <- percent(student_data_perct$Domain3Percent)
+student_data_perct$Domain4Percent <- percent(student_data_perct$Domain4Percent)
+student_data_perct$Domain5Percent <- percent(student_data_perct$Domain5Percent)
+
+student_data_col$percentage <- percent(student_data_col$percentage)
+student_data_col$Domain1Percent <- percent(student_data_col$Domain1Percent)
+student_data_col$Domain2Percent <- percent(student_data_col$Domain2Percent)
+student_data_col$Domain3Percent <- percent(student_data_col$Domain3Percent)
+student_data_col$Domain4Percent <- percent(student_data_col$Domain4Percent)
+student_data_col$Domain5Percent <- percent(student_data_col$Domain5Percent)
+
+q_percent$Perct. <- percent(q_percent$Perct.)
+q_sort$Perct. <- percent(q_sort$Perct.)
+
+```
+```{r}
+#table output
+
+library(knitr)
+
+#section A
+
+kable(student_data_col, caption = "Student Scores By ID")
+kable(student_data_perct, caption = "Student Scores By Percentage")
+plot
+
+#section B
+kable(q_sort, caption = "Question Scores by Form and Number")
+kable(q_percent, caption = "Questions Scores by Percentage")
+
+```
+
+
+

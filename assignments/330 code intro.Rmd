@@ -1,0 +1,98 @@
+---
+title: "330"
+author: "Abe Burton"
+date: "11/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir ="/Users/abrahamburton/Downloads" )
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(knitr)
+library(Hmisc)
+```
+
+```{r}
+mpg <- read.delim("MPGData.txt", header = T, stringsAsFactors = F,sep = " ")
+
+```
+
+
+```{r}
+mpg[1:5,]
+
+head(mpg)
+
+mpg[17,2]
+
+mpg$Weight
+
+summary(mpg)
+n=nrow(mpg)
+print(n)
+
+mpg[1:5,]
+mpg[c(1,3,5,7,9),]
+
+head(mpg)
+
+mpg[17,2]
+
+mpg$Weight
+```
+```{r}
+## Exploratory Analysis
+## Plot the data, calculate correlation and covariance
+plot(mpg$Weight,mpg$MPG,xlab="Weight",pch=19,ylab="MPG")
+scatter.smooth(mpg$Weight,mpg$MPG,pch=19,xlab="Weight",ylab="MPG")
+cor(mpg$Weight,mpg$MPG)
+cov(mpg$Weight,mpg$MPG)
+
+sum((mpg$Weight -  mean(mpg$Weight) )* (mpg$MPG - mean(mpg$MPG)))/(nrow(mpg) - 1)
+
+sum((mpg$Weight -  mean(mpg$Weight) ) / sd(mpg$Weight)* (mpg$MPG - mean(mpg$MPG)) / sd(mpg$MPG))/(nrow(mpg) - 1)
+```
+```{r}
+## Fit an SLR Model
+mpg.lm <- lm(MPG~Weight,data=mpg)
+
+summary(mpg.lm)
+summary(mpg.lm)$sigma
+mpg.lm$coefficients
+
+## Plot the Fitted Regression Line
+plot(mpg$Weight,mpg$MPG,xlab="Weight",pch=19,ylab="MPG")
+abline(a=mpg.lm$coef[1],b=mpg.lm$coef[2],lwd=3,col="green")
+plot(mpg$Weight,mpg$MPG,xlab="Weight",pch=19,ylab="MPG")
+abline(reg=mpg.lm,lwd=3,col="green")
+
+## Make a few Predictions (by hand and with R)
+weights.for.preds <- c(3000,20000)
+mpg.lm$coef[1]+mpg.lm$coef[2]*weights.for.preds
+predict.lm(mpg.lm,newdata=data.frame(Weight=weights.for.preds))
+
+predict.lm(mpg.lm,newdata=data.frame(Weight=weights.for.preds),
+           se.fit = TRUE)
+
+#### Prediction w/ uncertainty for one car at those x's
+
+predict.lm(mpg.lm,newdata=data.frame(Weight=weights.for.preds),
+           interval = "prediction",level = 0.95)
+
+#### Prediction w/ uncertainty for all cars at those x's
+
+
+predict.lm(mpg.lm,newdata=data.frame(Weight=weights.for.preds),
+           interval = "confidence",level = 0.95)
+
+
+
+
+## Plot using ggplot2
+library(ggplot2)
+ggplot(mpg,aes(x=Weight,y=MPG))+geom_point()+geom_smooth(method="lm",se=TRUE)
+```
+
